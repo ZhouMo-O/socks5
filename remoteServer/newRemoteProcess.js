@@ -1,5 +1,6 @@
 const net = require('net');
 const dns = require('dns');
+const Becrypto = require('../crypto/crypto');
 
 class remoteProcess {
     constructor(socket) {
@@ -24,7 +25,9 @@ class remoteProcess {
             let host = this.fistLinkProcess(socket, data);
             let remoteServer = this.linkRemoteServer(socket, host);
         } else if (this.linkStatus == 'proxy') {
-            this.remote.write(data);
+            let crypto = new Becrypto();
+            let deData = crypto.decrypt(data.slice(4));
+            this.remote.write(deData);
         }
     }
 
@@ -108,7 +111,9 @@ class remoteProcess {
         })
 
         this.remote.on('data', (data) => {
-            socket.write(data);
+            let crypto = new Becrypto();
+            let enData = crypto.encrypt(data);
+            socket.write(enData);
         })
 
         this.remote.on('end', () => {

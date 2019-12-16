@@ -1,4 +1,5 @@
 const net = require('net');
+const Becrypto = require('../crypto/crypto');
 
 class socketProcess {
     constructor(socket) {
@@ -24,7 +25,10 @@ class socketProcess {
         } else if (this.linkStatus == 'stepTwo') {
             return this.secondLinkProcess(socket, data);
         } else if (this.linkStatus == 'proxy') {
-            return this.remote.write(data);
+            console.log(`remoteData`, data.toString());
+            let crypto = new Becrypto();
+            let enData = crypto.encrypt(data);
+            return this.remote.write(enData);
         }
     }
 
@@ -125,9 +129,10 @@ class socketProcess {
                 this.linkStatus = 'proxy';
             } else if (this.linkStatus == 'proxy') {
                 console.log('proxyData', data);
-                return socket.write(data);
+                let crypto = new Becrypto();
+                let beData = crypto.decrypt(data.slice(4));
+                socket.write(beData);
             }
-            console.log(data);
         })
 
         this.remote.on('error', (err) => {
