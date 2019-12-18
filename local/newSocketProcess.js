@@ -112,7 +112,7 @@ class socketProcess {
     linkRemoteServer(socket, ATYP, host, port) {
         this.remote = net.createConnection({
             port: 8089,
-            host: '127.0.0.1'
+            host: '144.202.21.117'
         }, () => {
             console.log('链接成功');
             let palyload = this.buildConnectPlayLoad(ATYP, host, port);
@@ -156,11 +156,6 @@ class socketProcess {
         this.remote.on('error', (err) => {
             console.log('连接错误', err);
             socket.end()
-        })
-
-        this.remote.on('timeout', () => {
-            console.log('timeout');
-            req.destroyed || req.destroy();
         })
 
         this.remote.on('end', () => {

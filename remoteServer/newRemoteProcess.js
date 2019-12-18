@@ -15,12 +15,12 @@ class remoteProcess {
 
         socket.on('close', () => {
             console.log(`socket close`);
-            this.remote.end()
+            this.remote.end();
         })
 
         socket.on('error', (err) => {
             console.log(`socket error:`, err);
-            this.remote.end()
+            this.remote.end();
         })
     }
 
@@ -108,11 +108,13 @@ class remoteProcess {
 
         this.remote.on('end', () => {
             console.log('endProxy')
+            socket.end()
 
         })
 
         this.remote.on('close', () => {
             console.log('链接关闭');
+            socket.end();
 
         })
 
@@ -120,6 +122,7 @@ class remoteProcess {
             console.log('链接错误：', err)
             let reBuffer = this.buildCmd(0);
             socket.write(reBuffer);
+            socket.end();
         })
     }
 
