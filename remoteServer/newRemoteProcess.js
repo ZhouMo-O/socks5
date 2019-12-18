@@ -122,7 +122,6 @@ class remoteProcess {
             console.log('链接错误：', err)
             let reBuffer = this.buildCmd(0);
             socket.write(reBuffer);
-            socket.end();
         })
     }
 
