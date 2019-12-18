@@ -15,7 +15,6 @@ class remoteProcess {
 
         socket.on('close', () => {
             console.log(`socket close`);
-            this.remote.end();
         })
 
         socket.on('error', (err) => {
