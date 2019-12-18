@@ -6,32 +6,52 @@ class remoteProcess {
     constructor(socket) {
         this.socket = socket;
         this.linkStatus = 'stepOne';
+        this.deBuffer = Buffer.alloc(0);
+        this.reBuffer = Buffer.alloc(0);
 
         socket.on('data', (data) => {
             return this.linkProcess(this.socket, data)
         })
 
-        socket.on('close', (close) => {
-            console.log(close);
+        socket.on('close', () => {
+            console.log(`socket close`);
+            this.remote.end()
         })
 
         socket.on('error', (err) => {
-            console.log(err);
+            console.log(`socket error:`, err);
+            this.remote.end()
         })
     }
 
     async linkProcess(socket, data) {
         if (this.linkStatus == 'stepOne') {
-            let host = this.fistLinkProcess(socket, data);
+            let host = this.fistLinkProcess(data);
             let remoteServer = this.linkRemoteServer(socket, host);
         } else if (this.linkStatus == 'proxy') {
-            let crypto = new Becrypto();
-            let deData = crypto.decrypt(data.slice(4));
-            this.remote.write(deData);
+            this.deBuffer = Buffer.concat([this.deBuffer, data]);
+            while (true) {
+                if (this.deBuffer.length < 4) {
+                    return;
+                }
+                this.cmdBuffer = this.deBuffer.slice(0, 4);
+                this.cmdLen = this.cmdBuffer.readUInt32BE();
+
+                if (this.deBuffer.length < this.cmdLen + 4) {
+                    return;
+                }
+
+                this.crypto = new Becrypto();
+                this.reBuffer = this.deBuffer.slice(4, this.cmdLen + 4);
+                let deData = this.crypto.decrypt(this.reBuffer);
+                this.deBuffer = this.deBuffer.slice(4 + this.cmdLen);
+
+                this.remote.write(deData);
+            }
         }
     }
 
-    fistLinkProcess(socket, data) {
+    fistLinkProcess(data) {
         let offset = 0;
         let playLoadLength = data.readUInt32BE(offset, 4);
         offset += 4;;
@@ -57,29 +77,6 @@ class remoteProcess {
 
         let port = data.slice(-portLength);
 
-        if (ATYPType == 3) {
-            let host = hostAddr.toString()
-            console.log('正在解析的域名', host);
-            dns.lookup(host, (err, addresses) => {
-                if (err) {
-                    let reBuffer = this.buildCmd(0);
-                    console.log('域名解析错误,返回对端', reBuffer);
-                    socket.write(reBuffer);
-                    console.log(err);
-                };
-                // addresses.forEach(ip => {
-                //     console.log('域名解析后的IP', ip)
-                // })
-                console.log(`命令号:${cmd} 目标域名${host} 主机Ip:${addresses}:${port}`)
-                console.log(cmd, addresses, port);
-                return {
-                    cmd: cmd,
-                    host: addresses,
-                    port: port.toString()
-                }
-            });
-        }
-
         return {
             cmd: cmd,
             host: hostAddr.toString(),
@@ -103,13 +100,6 @@ class remoteProcess {
             socket.write(reBuffer);
         })
 
-        this.remote.on('timeout', () => {
-            let reBuffer = this.buildCmd(6);
-            console.log('timeout');
-            socket.write(reBuffer);
-            req.destroyed || req.destroy();
-        })
-
         this.remote.on('data', (data) => {
             let crypto = new Becrypto();
             let enData = crypto.encrypt(data);
@@ -118,15 +108,15 @@ class remoteProcess {
 
         this.remote.on('end', () => {
             console.log('endProxy')
+
         })
 
         this.remote.on('close', () => {
-            console.log('链接关闭')
-            let reBuffer = this.buildCmd(0);
-            socket.write(reBuffer);
+            console.log('链接关闭');
+
         })
 
-        this.remote.on('err', (err) => {
+        this.remote.on('error', (err) => {
             console.log('链接错误：', err)
             let reBuffer = this.buildCmd(0);
             socket.write(reBuffer);

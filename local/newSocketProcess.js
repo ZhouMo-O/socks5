@@ -3,19 +3,24 @@ const Becrypto = require('../crypto/crypto');
 
 class socketProcess {
     constructor(socket) {
-        this.socket = socket;
-        this.linkStatus = 'stepOne';
+        this.socket = socket; //socket
+        this.linkStatus = 'stepOne'; //链接状态
+        this.deBuffer = Buffer.alloc(0); //需要处理的buffer
+        this.reBuffer = Buffer.alloc(0); //返回给local的buffer
+        this.processStatus = 'start'; //buffer处理状态
 
         socket.on('data', (data) => {
             return this.linkProcess(this.socket, data)
         })
 
-        socket.on('close', (close) => {
-            console.log(close)
+        socket.on('close', () => {
+            console.log(`socks5链接关闭:`)
+            this.remote.end();
         })
 
         socket.on('error', (err) => {
-            console.log(err)
+            console.log(`socket error:`, err);
+            this.remote.end();
         })
     }
 
@@ -25,7 +30,6 @@ class socketProcess {
         } else if (this.linkStatus == 'stepTwo') {
             return this.secondLinkProcess(socket, data);
         } else if (this.linkStatus == 'proxy') {
-            console.log(`remoteData`, data.toString());
             let crypto = new Becrypto();
             let enData = crypto.encrypt(data);
             return this.remote.write(enData);
@@ -33,7 +37,7 @@ class socketProcess {
     }
 
     fistLinkProcess(socket, data) {
-        console.log('第一次link处理数据', data);
+        console.log('第一次link处理数据', data.length);
         const authMethdos = {
             NOAUTH: 0, //no auth
             USERNAME: 1 //username/password
@@ -128,15 +132,30 @@ class socketProcess {
                 }
                 this.linkStatus = 'proxy';
             } else if (this.linkStatus == 'proxy') {
-                console.log('proxyData', data);
-                let crypto = new Becrypto();
-                let beData = crypto.decrypt(data.slice(4));
-                socket.write(beData);
+                this.deBuffer = Buffer.concat([this.deBuffer, data]);
+                while (true) {
+                    if (this.deBuffer.length < 4) {
+                        return;
+                    }
+                    this.cmdBuffer = this.deBuffer.slice(0, 4);
+                    this.cmdLen = this.cmdBuffer.readUInt32BE();
+
+                    if (this.deBuffer.length < this.cmdLen + 4) {
+                        return;
+                    }
+                    // decrypt
+                    this.crypto = new Becrypto();
+                    this.reBuffer = this.deBuffer.slice(4, this.cmdLen + 4);
+                    let deData = this.crypto.decrypt(this.reBuffer);
+                    this.deBuffer = this.deBuffer.slice(4 + this.cmdLen);
+                    socket.write(deData);
+                }
             }
         })
 
         this.remote.on('error', (err) => {
             console.log('连接错误', err);
+            socket.end()
         })
 
         this.remote.on('timeout', () => {
@@ -146,12 +165,17 @@ class socketProcess {
 
         this.remote.on('end', () => {
             console.log('endProxy')
+            socket.end()
         })
 
         this.remote.on('close', (close) => {
             console.log('连接关闭', close);
+            socket.end()
         })
     }
+
+
+
 
     //根据remote服务器的返回结果打一个对应的包返回给socks5。
     buildLocalCmd(cmd) {
@@ -174,7 +198,6 @@ class socketProcess {
         offset += 4;
 
         headBuffer.writeInt16BE(0, offset);
-        console.log(`第二次link返回数据`, headBuffer);
         return headBuffer;
     }
 
@@ -189,7 +212,6 @@ class socketProcess {
         const cmdHead = Buffer.alloc(4);
         cmdHead.writeUInt32BE(palyload.length);
         const cmdBuffer = Buffer.concat([cmdHead, palyload], 4 + palyload.length);
-        console.log(`cmd`, cmdBuffer);
         return cmdBuffer;
     }
 
@@ -214,7 +236,6 @@ class socketProcess {
         offset++;
 
         reBuffer.write(port, offset);
-        console.log(`playload`, reBuffer);
         return reBuffer;
     }
 
